@@ -1,0 +1,42 @@
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Index from "./pages/Index";
+import RestaurantList from "./pages/RestaurantList";
+import RestaurantDetail from "./pages/RestaurantDetail";
+import RatingPage from "./pages/RatingPage";
+import DealDetail from "./pages/DealDetail";
+import PartnerLogin from "./pages/PartnerLogin";
+import AdminLogin from "./pages/AdminLogin";
+import PartnerDashboard from "./pages/PartnerDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
+import NotFound from "./pages/NotFound";
+
+const queryClient = new QueryClient();
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/restaurants" element={<RestaurantList />} />
+          <Route path="/restaurant/:id" element={<RestaurantDetail />} />
+          <Route path="/deal/:restaurantId/:dishId" element={<DealDetail />} />
+          <Route path="/rating/:tokenId" element={<RatingPage />} />
+          <Route path="/partner/login" element={<PartnerLogin />} />
+          <Route path="/partner/dashboard" element={<PartnerDashboard />} />
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
+
+export default App;
