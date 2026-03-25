@@ -1,0 +1,903 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  usePartnerDashboard,
+  usePartnerRestaurants,
+  usePartnerDeals,
+  useCreatePartnerDeal,
+  useTogglePartnerDeal,
+  useDeletePartnerDeal,
+  usePartnerReviews,
+  useCreatePartnerRestaurant,
+} from '@/hooks/use-api';
+import { getAuthToken, getStoredUser, clearAuth, uploadDealImage, resolveImageUrl } from '@/lib/api';
+import {
+  REVIEW_BADGE_ICONS,
+  PRIMARY_TASTES,
+  DEAL_TYPES,
+  EATING_STYLES,
+  FEEDS_OPTIONS as FEEDS_LIST,
+} from '@/types/food';
+import {
+  LayoutDashboard, Tag, MessageSquare, Plus, Trash2, Pause, Play,
+  LogOut, Loader2, Upload, Building2, X, ChevronDown, Image as ImageIcon, Check,
+} from 'lucide-react';
+import { LoadingScreen } from '@/components/LoadingScreen';
+
+type Tab = 'overview' | 'deals' | 'reviews';
+
+
+export default function PartnerDashboard() {
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<Tab>('overview');
+  const [selectedRestaurant, setSelectedRestaurant] = useState<string>('');
+  const [showDealForm, setShowDealForm] = useState(false);
+  const [showRestaurantForm, setShowRestaurantForm] = useState(false);
+
+  useEffect(() => {
+    if (!getAuthToken()) navigate('/partner/login');
+  }, [navigate]);
+
+  const user = getStoredUser();
+  const { data: dashboard, isLoading: dashLoading } = usePartnerDashboard();
+  const { data: restaurants } = usePartnerRestaurants() as { data: Array<{ id: string; name: string; coverImage: string }> | undefined };
+  const { data: deals } = usePartnerDeals(selectedRestaurant || undefined) as { data: Array<Record<string, unknown>> | undefined };
+  const { data: reviews } = usePartnerReviews() as { data: Array<Record<string, unknown>> | undefined };
+
+  useEffect(() => {
+    if (restaurants?.length && !selectedRestaurant) {
+      setSelectedRestaurant(restaurants[0].id);
+    }
+  }, [restaurants, selectedRestaurant]);
+
+  const handleLogout = () => {
+    clearAuth();
+    navigate('/partner/login');
+  };
+
+  const tabs: Array<{ key: Tab; label: string; icon: React.ReactNode }> = [
+    { key: 'overview', label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" strokeWidth={2.5} /> },
+    { key: 'deals', label: 'Deals', icon: <Tag className="w-4 h-4" strokeWidth={2.5} /> },
+    { key: 'reviews', label: 'Reviews', icon: <MessageSquare className="w-4 h-4" strokeWidth={2.5} /> },
+  ];
+
+  if (dashLoading) {
+    return <LoadingScreen message="Loading dashboard..." />;
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Top bar */}
+      <div className="sticky top-0 z-30 bg-amber-50 border-b border-amber-200 px-4 py-3">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-accent">
+              <Building2 className="w-5 h-5 text-accent-foreground" />
+            </div>
+            <div>
+              <h1 className="text-lg font-display text-foreground">{user?.businessName || 'Partner'}</h1>
+              <p className="text-xs font-body text-muted-foreground">{user?.email}</p>
+            </div>
+          </div>
+          <motion.button whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.03 }} onClick={handleLogout} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-body font-semibold text-muted-foreground hover:text-rose-700 hover:bg-rose-100 cursor-pointer transition-all">
+            <LogOut className="w-4 h-4" strokeWidth={2.5} /> Logout
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Tab bar */}
+      <div className="sticky top-[61px] z-20 bg-amber-50 border-b border-amber-200">
+        <div className="max-w-5xl mx-auto flex">
+          {tabs.map((t) => (
+            <motion.button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              whileTap={{ scale: 0.95 }}
+              className={`relative flex items-center gap-2 px-5 py-3.5 text-sm font-body font-semibold transition-colors cursor-pointer ${
+                tab === t.key
+                  ? 'text-accent'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className={`transition-transform ${tab === t.key ? 'scale-110' : ''}`}>{t.icon}</span>
+              {t.label}
+              {tab === t.key && (
+                <motion.div
+                  layoutId="partner-tab-indicator"
+                  className="absolute bottom-0 left-2 right-2 h-[3px] rounded-full bg-accent"
+                  transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                />
+              )}
+            </motion.button>
+          ))}
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-4 py-6">
+        {/* Quick add button — always visible */}
+        <div className="flex gap-3 mb-6">
+          <motion.button
+            whileTap={{ scale: 0.93 }}
+            whileHover={{ scale: 1.02 }}
+            onClick={() => setShowDealForm(true)}
+            className="btn-shine flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-accent via-accent/90 to-accent/70 text-accent-foreground font-body font-extrabold text-sm tracking-wide cursor-pointer shadow-xl shadow-accent/30 hover:shadow-accent/50 transition-all"
+          >
+            <Plus className="w-5 h-5" strokeWidth={3} /> Add Deal
+          </motion.button>
+          {(!restaurants || restaurants.length === 0) && (
+            <motion.button
+              whileTap={{ scale: 0.93 }}
+              whileHover={{ scale: 1.02 }}
+              onClick={() => setShowRestaurantForm(true)}
+              className="btn-shine flex items-center gap-2 px-6 py-3 rounded-2xl bg-gradient-to-r from-foreground via-foreground/95 to-foreground/80 text-background font-body font-extrabold text-sm tracking-wide cursor-pointer shadow-xl shadow-foreground/25 hover:shadow-foreground/40 transition-all"
+            >
+              <Building2 className="w-5 h-5" strokeWidth={3} /> Add Restaurant
+            </motion.button>
+          )}
+        </div>
+
+        {tab === 'overview' && dashboard && <OverviewTab stats={dashboard.stats} />}
+
+        {tab === 'deals' && (
+          <DealsTab
+            restaurants={restaurants || []}
+            selectedRestaurant={selectedRestaurant}
+            setSelectedRestaurant={setSelectedRestaurant}
+            deals={deals || []}
+          />
+        )}
+
+        {tab === 'reviews' && <ReviewsTab reviews={reviews || []} />}
+      </div>
+
+      {/* Deal form modal */}
+      <AnimatePresence>
+        {showDealForm && (
+          <DealFormModal
+            restaurants={restaurants || []}
+            onClose={() => setShowDealForm(false)}
+            onNeedRestaurant={() => { setShowDealForm(false); setShowRestaurantForm(true); }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Restaurant form modal */}
+      <AnimatePresence>
+        {showRestaurantForm && (
+          <RestaurantFormModal onClose={() => setShowRestaurantForm(false)} />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Overview Tab ──
+function OverviewTab({ stats }: { stats: { totalDeals: number; activeDeals: number; totalViews: number; totalRatings: number; totalReviews: number } }) {
+  const cards = [
+    { label: 'Active Deals', value: stats.activeDeals, icon: <Tag className="w-5 h-5" />, color: 'bg-emerald-100 border border-emerald-200 text-emerald-700', iconBg: 'bg-emerald-200' },
+    { label: 'Total Deals', value: stats.totalDeals, icon: <Tag className="w-5 h-5" />, color: 'bg-sky-100 border border-sky-200 text-sky-700', iconBg: 'bg-sky-200' },
+    { label: 'Total Ratings', value: stats.totalRatings, icon: <MessageSquare className="w-5 h-5" />, color: 'bg-amber-100 border border-amber-200 text-amber-700', iconBg: 'bg-amber-200' },
+    { label: 'Total Reviews', value: stats.totalReviews, icon: <MessageSquare className="w-5 h-5" />, color: 'bg-purple-100 border border-purple-200 text-purple-700', iconBg: 'bg-purple-200' },
+  ];
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {cards.map((c, i) => (
+        <motion.div
+          key={c.label}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: i * 0.06 }}
+          className={`flex flex-col gap-2 p-4 rounded-2xl ${c.color}`}
+        >
+          <div className={`w-9 h-9 rounded-xl ${c.iconBg} flex items-center justify-center`}>
+            {c.icon}
+          </div>
+          <span className="text-3xl font-display">{c.value}</span>
+          <span className="text-xs font-body font-semibold uppercase tracking-wider opacity-70">{c.label}</span>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+// ── Deals Tab ──
+function DealsTab({
+  restaurants,
+  selectedRestaurant,
+  setSelectedRestaurant,
+  deals,
+}: {
+  restaurants: Array<{ id: string; name: string }>;
+  selectedRestaurant: string;
+  setSelectedRestaurant: (id: string) => void;
+  deals: Array<Record<string, unknown>>;
+}) {
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const toggleDeal = useTogglePartnerDeal();
+  const deleteDeal = useDeletePartnerDeal();
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Restaurant selector */}
+      <AnimatedSelect
+        value={selectedRestaurant}
+        onChange={setSelectedRestaurant}
+        options={restaurants.map((r) => ({ value: r.id, label: r.name }))}
+        className="w-full sm:w-64"
+      />
+
+      {/* Deals list */}
+      {deals.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+          <Tag className="w-10 h-10 opacity-40" />
+          <p className="text-sm font-body">No deals yet. Add your first deal!</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {deals.map((deal: Record<string, unknown>) => {
+            const isActive = new Date(deal.dealExpiresAt as string) > new Date();
+            return (
+              <div
+                key={deal.id as string}
+                className="flex items-center gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50"
+              >
+                <img
+                  src={resolveImageUrl(deal.image as string)}
+                  alt={deal.name as string}
+                  className="w-14 h-14 rounded-lg object-cover flex-shrink-0"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-body font-semibold text-foreground truncate">{deal.name as string}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs font-body text-muted-foreground">${(deal.price as number)?.toFixed(2)}</span>
+                    <span className={`text-xs font-body font-medium px-2 py-0.5 rounded-full ${isActive ? 'bg-emerald-100 border border-emerald-200 text-emerald-700' : 'bg-gray-100 border border-gray-200 text-gray-600'}`}>
+                      {isActive ? 'Active' : 'Expired'}
+                    </span>
+                    <span className="text-xs font-body text-muted-foreground">{deal.views as number || 0} views</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <motion.button
+                    whileTap={{ scale: 0.85 }}
+                    whileHover={{ scale: 1.1 }}
+                    onClick={() => {
+                      setTogglingId(deal.id as string);
+                      toggleDeal.mutate(deal.id as string, { onSettled: () => setTogglingId(null) });
+                    }}
+                    disabled={togglingId === (deal.id as string)}
+                    className={`p-2.5 rounded-xl transition-all cursor-pointer disabled:opacity-50 shadow-sm hover:shadow-md ${
+                      isActive
+                        ? 'bg-amber-100 border border-amber-200 hover:bg-amber-200 hover:ring-1 hover:ring-amber-300'
+                        : 'bg-emerald-100 border border-emerald-200 hover:bg-emerald-200 hover:ring-1 hover:ring-emerald-300'
+                    }`}
+                    title={isActive ? 'Pause' : 'Activate'}
+                  >
+                    {togglingId === (deal.id as string) ? (
+                      <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+                    ) : isActive ? (
+                      <Pause className="w-4 h-4 text-amber-600" strokeWidth={2.5} />
+                    ) : (
+                      <Play className="w-4 h-4 text-green-600" strokeWidth={2.5} />
+                    )}
+                  </motion.button>
+                  <motion.button
+                    whileTap={{ scale: 0.85 }}
+                    whileHover={{ scale: 1.1 }}
+                    onClick={() => {
+                      if (confirm('Delete this deal?')) {
+                        setDeletingId(deal.id as string);
+                        deleteDeal.mutate(deal.id as string, { onSettled: () => setDeletingId(null) });
+                      }
+                    }}
+                    disabled={deletingId === (deal.id as string)}
+                    className="p-2.5 rounded-xl bg-rose-100 border border-rose-200 text-rose-700 hover:bg-rose-200 hover:ring-1 hover:ring-rose-300 shadow-sm hover:shadow-md transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {deletingId === (deal.id as string) ? (
+                      <Loader2 className="w-4 h-4 text-destructive animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4 text-destructive" strokeWidth={2.5} />
+                    )}
+                  </motion.button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Reviews Tab ──
+function ReviewsTab({ reviews }: { reviews: Array<Record<string, unknown>> }) {
+  // Aggregate badge counts
+  const badgeCounts: Record<string, number> = {};
+  for (const r of reviews) {
+    const badge = r.badge as string;
+    badgeCounts[badge] = (badgeCounts[badge] || 0) + 1;
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Badge summary */}
+      <div className="flex flex-wrap gap-2">
+        {Object.entries(badgeCounts).map(([badge, count]) => (
+          <div key={badge} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-sky-100 border border-sky-200">
+            <span className="text-lg">{REVIEW_BADGE_ICONS[badge as keyof typeof REVIEW_BADGE_ICONS] || ''}</span>
+            <span className="text-sm font-body font-semibold text-sky-700">{badge}</span>
+            <span className="text-xs font-body text-sky-600 ml-1">{count}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Reviews list */}
+      {reviews.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+          <MessageSquare className="w-10 h-10 opacity-40" />
+          <p className="text-sm font-body">No reviews yet.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {reviews.map((r: Record<string, unknown>) => {
+            const dish = r.dish as Record<string, unknown> | undefined;
+            const restaurant = r.restaurant as Record<string, unknown> | undefined;
+            return (
+              <div key={r.id as string} className="flex items-start gap-3 p-3 rounded-xl border border-amber-200 bg-amber-50">
+                {dish?.image && (
+                  <img src={resolveImageUrl(dish.image as string)} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{REVIEW_BADGE_ICONS[r.badge as keyof typeof REVIEW_BADGE_ICONS] || ''}</span>
+                    <span className="text-sm font-body font-semibold text-foreground">{r.badge as string}</span>
+                  </div>
+                  {r.comment && (
+                    <p className="text-xs font-body text-muted-foreground mt-1">{r.comment as string}</p>
+                  )}
+                  <p className="text-xs font-body text-muted-foreground/60 mt-1">
+                    {dish?.name as string} &middot; {restaurant?.name as string}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Deal Form Modal (Upload Flow) ──
+function DealFormModal({
+  restaurants,
+  onClose,
+  onNeedRestaurant,
+}: {
+  restaurants: Array<{ id: string; name: string }>;
+  onClose: () => void;
+  onNeedRestaurant: () => void;
+}) {
+  const createDeal = useCreatePartnerDeal();
+  const [restaurantId, setRestaurantId] = useState(restaurants[0]?.id || '');
+  const [name, setName] = useState('');
+  const [categories, setCategories] = useState<string[]>([EATING_STYLES[0]]);
+  const [dealTypes, setDealTypes] = useState<string[]>([DEAL_TYPES[0]]);
+  const [primaryTastes, setPrimaryTastes] = useState<string[]>([PRIMARY_TASTES[0]]);
+  const [price, setPrice] = useState('');
+  const [feedsList, setFeedsList] = useState<string[]>([FEEDS_LIST[0]]);
+  const [modifiers] = useState<string[]>([]);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleImageChange = useCallback((file: File) => {
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setImagePreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) handleImageChange(file);
+  }, [handleImageChange]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!restaurantId) { onNeedRestaurant(); return; }
+    if (!imageFile) { setError('Please upload a photo'); return; }
+    setError('');
+    setUploading(true);
+    try {
+      const { url } = await uploadDealImage(imageFile);
+      await createDeal.mutateAsync({
+        restaurantId,
+        data: {
+          name,
+          image: url,
+          category: categories.join(', '),
+          primaryTaste: primaryTastes.join(', '),
+          price: parseFloat(price),
+          feeds: feedsList.join(', '),
+          dealType: dealTypes.join(', '),
+          dealExpiresAt: new Date(Date.now() + 86400000).toISOString(),
+          modifiers,
+        },
+      });
+      onClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create deal');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (restaurants.length === 0) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm p-4"
+      >
+        <motion.div
+          initial={{ scale: 0.95 }}
+          animate={{ scale: 1 }}
+          exit={{ scale: 0.95 }}
+          className="bg-white border border-amber-200 rounded-2xl p-6 w-full max-w-md shadow-elevated"
+        >
+          <p className="text-sm font-body text-foreground text-center mb-4">
+            You need to create a restaurant first before adding deals.
+          </p>
+          <div className="flex gap-2">
+            <motion.button whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.02 }} onClick={onClose} className="flex-1 py-2.5 rounded-xl border-2 border-amber-300 text-sm font-body font-bold cursor-pointer hover:bg-amber-100 hover:border-amber-400 transition-all">Cancel</motion.button>
+            <motion.button whileTap={{ scale: 0.9 }} whileHover={{ scale: 1.02 }} onClick={onNeedRestaurant} className="btn-shine flex-1 py-2.5 rounded-xl bg-gradient-to-r from-accent via-accent/90 to-accent/70 text-accent-foreground text-sm font-body font-extrabold cursor-pointer shadow-md shadow-accent/20 hover:shadow-accent/40 tracking-wide transition-all">Add Restaurant</motion.button>
+          </div>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-start justify-center bg-foreground/40 backdrop-blur-sm overflow-y-auto p-4 pt-8 pb-8"
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 20 }}
+        className="bg-white border border-amber-200 rounded-2xl w-full max-w-lg shadow-elevated"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-amber-200">
+          <h2 className="text-xl font-display text-foreground">Add New Deal</h2>
+          <motion.button whileTap={{ scale: 0.85 }} onClick={onClose} className="p-1.5 rounded-lg hover:bg-amber-100 cursor-pointer transition-colors"><X className="w-5 h-5" strokeWidth={2.5} /></motion.button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-5 py-4 flex flex-col gap-4 max-h-[70vh] overflow-y-auto">
+          {/* Restaurant */}
+          <div>
+            <label className="text-xs font-body font-semibold text-foreground/70 uppercase tracking-wider mb-1.5 block">Restaurant</label>
+            <AnimatedSelect
+              value={restaurantId}
+              onChange={setRestaurantId}
+              options={restaurants.map((r) => ({ value: r.id, label: r.name }))}
+            />
+          </div>
+
+          {/* Deal Title */}
+          <div>
+            <label className="text-xs font-body font-semibold text-foreground/70 uppercase tracking-wider mb-1.5 block">Deal Title</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. BBQ Bacon Burger Combo"
+              required
+              className="w-full px-3 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-sm font-body focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-500"
+            />
+          </div>
+
+          {/* Deal Setup dropdowns */}
+          <div className="grid grid-cols-2 gap-3">
+            <MultiDropdownField label="Eating Style" values={categories} onChange={setCategories} options={[...EATING_STYLES]} />
+            <MultiDropdownField label="Deal Type" values={dealTypes} onChange={setDealTypes} options={[...DEAL_TYPES, 'Under $15', 'Under $20', 'Best Value', 'Family Feast']} />
+            <MultiDropdownField label="Taste" values={primaryTastes} onChange={setPrimaryTastes} options={[...PRIMARY_TASTES]} />
+            <MultiDropdownField label="Feeds" values={feedsList} onChange={setFeedsList} options={[...FEEDS_LIST]} />
+          </div>
+
+          {/* Price */}
+          <div>
+            <label className="text-xs font-body font-semibold text-foreground/70 uppercase tracking-wider mb-1.5 block">Deal Price ($)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder="9.99"
+              required
+              className="w-full px-3 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-sm font-body focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-500"
+            />
+          </div>
+
+          {/* Photo upload */}
+          <div>
+            <label className="text-xs font-body font-semibold text-foreground/70 uppercase tracking-wider mb-1.5 block">Photo</label>
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDrop}
+              className="relative flex flex-col items-center gap-2 p-6 rounded-xl border-2 border-dashed border-amber-300 hover:border-amber-400 transition-colors cursor-pointer bg-amber-50"
+              onClick={() => document.getElementById('deal-image-input')?.click()}
+            >
+              {imagePreview ? (
+                <img src={imagePreview} alt="Preview" className="w-full h-32 object-cover rounded-lg" />
+              ) : (
+                <>
+                  <ImageIcon className="w-8 h-8 text-muted-foreground/50" />
+                  <p className="text-xs font-body text-muted-foreground text-center">
+                    Drag & drop or tap to upload
+                  </p>
+                </>
+              )}
+              <input
+                id="deal-image-input"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(e) => e.target.files?.[0] && handleImageChange(e.target.files[0])}
+                className="hidden"
+              />
+            </div>
+          </div>
+
+          {error && <p className="text-sm font-body text-destructive text-center">{error}</p>}
+
+          {/* Submit */}
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.01 }}
+            type="submit"
+            disabled={uploading}
+            className="btn-shine flex items-center justify-center gap-2 w-full py-5 rounded-2xl bg-gradient-to-r from-accent via-accent/90 to-accent/70 text-accent-foreground font-body font-extrabold text-base tracking-wide cursor-pointer shadow-xl shadow-accent/30 hover:shadow-accent/50 transition-all disabled:opacity-50"
+          >
+            {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
+            {uploading ? 'Creating...' : 'Create Deal'}
+          </motion.button>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ── Restaurant Form Modal ──
+function RestaurantFormModal({ onClose }: { onClose: () => void }) {
+  const createRestaurant = useCreatePartnerRestaurant();
+  const [name, setName] = useState('');
+  const [coverImage, setCoverImage] = useState('');
+  const [redirectUrl, setRedirectUrl] = useState('');
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    try {
+      await createRestaurant.mutateAsync({
+        name,
+        coverImage: coverImage || '/images/pad-thai.jpg',
+        redirectUrl,
+      });
+      onClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create restaurant');
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm p-4"
+    >
+      <motion.div
+        initial={{ scale: 0.95 }}
+        animate={{ scale: 1 }}
+        exit={{ scale: 0.95 }}
+        className="bg-white border border-amber-200 rounded-2xl w-full max-w-md shadow-elevated"
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-amber-200">
+          <h2 className="text-xl font-display text-foreground">Add Restaurant</h2>
+          <motion.button whileTap={{ scale: 0.85 }} whileHover={{ scale: 1.1 }} onClick={onClose} className="p-1.5 rounded-lg hover:bg-amber-100 cursor-pointer"><X className="w-5 h-5" strokeWidth={2.5} /></motion.button>
+        </div>
+        <form onSubmit={handleSubmit} className="px-5 py-4 flex flex-col gap-4">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Restaurant Name"
+            required
+            className="w-full px-3 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-sm font-body focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-500"
+          />
+          <input
+            type="text"
+            value={coverImage}
+            onChange={(e) => setCoverImage(e.target.value)}
+            placeholder="Cover Image URL (optional)"
+            className="w-full px-3 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-sm font-body focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-500"
+          />
+          <input
+            type="url"
+            value={redirectUrl}
+            onChange={(e) => setRedirectUrl(e.target.value)}
+            placeholder="Website / Order URL"
+            required
+            className="w-full px-3 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-sm font-body focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-500"
+          />
+          {error && <p className="text-sm font-body text-destructive text-center">{error}</p>}
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            type="submit"
+            disabled={createRestaurant.isPending}
+            className="btn-shine flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl bg-gradient-to-r from-accent via-accent/90 to-accent/70 text-accent-foreground font-body font-extrabold text-sm tracking-wide cursor-pointer shadow-xl shadow-accent/30 hover:shadow-accent/50 transition-all disabled:opacity-50"
+          >
+            {createRestaurant.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Building2 className="w-4 h-4" />}
+            {createRestaurant.isPending ? 'Creating...' : 'Create Restaurant'}
+          </motion.button>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ── Animated Select (for id/label pairs) ──
+function AnimatedSelect({
+  value,
+  onChange,
+  options,
+  className = '',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: Array<{ value: string; label: string }>;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selected = options.find((o) => o.value === value);
+
+  return (
+    <div className={`relative ${className}`} ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between pl-3 pr-3 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-sm font-body text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-500 transition-colors"
+      >
+        <span>{selected?.label || 'Select...'}</span>
+        <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
+          <ChevronDown className="w-4 h-4 text-muted-foreground" />
+        </motion.div>
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.ul
+            initial={{ opacity: 0, y: -4, scaleY: 0.95 }}
+            animate={{ opacity: 1, y: 0, scaleY: 1 }}
+            exit={{ opacity: 0, y: -4, scaleY: 0.95 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+            style={{ transformOrigin: 'top' }}
+            className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-xl border border-amber-200 bg-white shadow-elevated py-1"
+          >
+            {options.map((o, i) => (
+              <motion.li
+                key={o.value}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.025, duration: 0.12 }}
+                onClick={() => { onChange(o.value); setOpen(false); }}
+                className={`px-3 py-2 text-sm font-body cursor-pointer transition-colors ${
+                  o.value === value
+                    ? 'bg-sky-100 text-sky-700 font-semibold'
+                    : 'text-foreground hover:bg-amber-100'
+                }`}
+              >
+                {o.label}
+              </motion.li>
+            ))}
+          </motion.ul>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Reusable Animated Dropdown ──
+function DropdownField({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const display = value || placeholder || 'Select...';
+  const filtered = options.filter(Boolean);
+
+  return (
+    <div>
+      <label className="text-xs font-body font-semibold text-foreground/70 uppercase tracking-wider mb-1.5 block">{label}</label>
+      <div className="relative" ref={ref}>
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="w-full flex items-center justify-between pl-3 pr-3 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-sm font-body cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-500 transition-colors"
+        >
+          <span className={value ? 'text-foreground' : 'text-muted-foreground'}>{display}</span>
+          <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+          </motion.div>
+        </button>
+        <AnimatePresence>
+          {open && (
+            <motion.ul
+              initial={{ opacity: 0, y: -4, scaleY: 0.95 }}
+              animate={{ opacity: 1, y: 0, scaleY: 1 }}
+              exit={{ opacity: 0, y: -4, scaleY: 0.95 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              style={{ transformOrigin: 'top' }}
+              className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-xl border border-amber-200 bg-white shadow-elevated py-1"
+            >
+              {placeholder && (
+                <motion.li
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.02 }}
+                  onClick={() => { onChange(''); setOpen(false); }}
+                  className="px-3 py-2 text-sm font-body text-muted-foreground cursor-pointer hover:bg-amber-100 transition-colors"
+                >
+                  {placeholder}
+                </motion.li>
+              )}
+              {filtered.map((o, i) => (
+                <motion.li
+                  key={o}
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.025, duration: 0.12 }}
+                  onClick={() => { onChange(o); setOpen(false); }}
+                  className={`px-3 py-2 text-sm font-body cursor-pointer transition-colors ${
+                    o === value
+                      ? 'bg-sky-100 text-sky-700 font-semibold'
+                      : 'text-foreground hover:bg-amber-100'
+                  }`}
+                >
+                  {o}
+                </motion.li>
+              ))}
+            </motion.ul>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+// ── Multi-select Dropdown (stays open, toggles items) ──
+function MultiDropdownField({
+  label,
+  values,
+  onChange,
+  options,
+}: {
+  label: string;
+  values: string[];
+  onChange: (v: string[]) => void;
+  options: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const toggle = (item: string) => {
+    onChange(
+      values.includes(item)
+        ? values.filter((v) => v !== item)
+        : [...values, item]
+    );
+  };
+
+  const display = values.length > 0 ? values.join(', ') : 'Select...';
+
+  return (
+    <div>
+      <label className="text-xs font-body font-semibold text-foreground/70 uppercase tracking-wider mb-1.5 block">{label}</label>
+      <div className="relative" ref={ref}>
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="w-full flex items-center justify-between pl-3 pr-3 py-2.5 rounded-xl border border-amber-300 bg-amber-50 text-sm font-body cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-400/40 focus:border-amber-500 transition-colors"
+        >
+          <span className={`truncate ${values.length > 0 ? 'text-foreground' : 'text-muted-foreground'}`}>{display}</span>
+          <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+          </motion.div>
+        </button>
+        <AnimatePresence>
+          {open && (
+            <motion.ul
+              initial={{ opacity: 0, y: -4, scaleY: 0.95 }}
+              animate={{ opacity: 1, y: 0, scaleY: 1 }}
+              exit={{ opacity: 0, y: -4, scaleY: 0.95 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              style={{ transformOrigin: 'top' }}
+              className="absolute z-50 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-xl border border-amber-200 bg-white shadow-elevated py-1"
+            >
+              {options.filter(Boolean).map((o, i) => {
+                const selected = values.includes(o);
+                return (
+                  <motion.li
+                    key={o}
+                    initial={{ opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.025, duration: 0.12 }}
+                    onClick={() => toggle(o)}
+                    className={`flex items-center gap-2 px-3 py-2 text-sm font-body cursor-pointer transition-colors ${
+                      selected
+                        ? 'bg-sky-100 text-sky-700 font-semibold'
+                        : 'text-foreground hover:bg-amber-100'
+                    }`}
+                  >
+                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                      selected ? 'border-sky-500 bg-sky-500' : 'border-amber-300'
+                    }`}>
+                      {selected && <Check className="w-3 h-3 text-accent-foreground" />}
+                    </div>
+                    {o}
+                  </motion.li>
+                );
+              })}
+            </motion.ul>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
