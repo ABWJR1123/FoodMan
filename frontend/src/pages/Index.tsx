@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
-import { PriceRange, PRICE_RANGES, PRICE_RANGE_ICONS, PrimaryTaste, PRIMARY_TASTES, DealType, DEAL_TYPES, DEAL_ICONS, Feeds, FEEDS_OPTIONS, EatingStyle, EATING_STYLES, EATING_STYLE_ICONS } from '@/types/food';
+import { PriceRange, PRICE_RANGES, PRICE_RANGE_ICONS, PrimaryTaste, PRIMARY_TASTES, DealType, Feeds, FEEDS_OPTIONS, EatingStyle, EATING_STYLES, EATING_STYLE_ICONS } from '@/types/food';
 import { TasteTile } from '@/components/TasteTile';
 import { Footer } from '@/components/Footer';
 import { UtensilsCrossed, Search, Moon, Sun, ArrowRight, ChevronDown, MapPin, Users, Check, X } from 'lucide-react';
@@ -39,12 +39,6 @@ const STYLE_COLORS: Record<EatingStyle, { bg: string; border: string; activeBord
   'Snacky':         { bg: 'bg-pink-50',     border: 'border-pink-300',    activeBorder: 'border-pink-500',    activeBg: 'bg-pink-200',    activeText: 'text-pink-900',    hover: 'hover:bg-pink-100 hover:border-pink-400',      text: 'text-pink-700' },
 };
 
-const DEAL_COLORS: Record<DealType, { bg: string; border: string; activeBorder: string; activeBg: string; activeText: string; hover: string; text: string }> = {
-  'Under $10':      { bg: 'bg-emerald-50',  border: 'border-emerald-300', activeBorder: 'border-emerald-500', activeBg: 'bg-emerald-200', activeText: 'text-emerald-900', hover: 'hover:bg-emerald-100 hover:border-emerald-400', text: 'text-emerald-700' },
-  'BOGO':           { bg: 'bg-violet-50',   border: 'border-violet-300',  activeBorder: 'border-violet-500',  activeBg: 'bg-violet-200',  activeText: 'text-violet-900',  hover: 'hover:bg-violet-100 hover:border-violet-400',   text: 'text-violet-700' },
-  'Late Night':     { bg: 'bg-indigo-50',   border: 'border-indigo-300',  activeBorder: 'border-indigo-500',  activeBg: 'bg-indigo-200',  activeText: 'text-indigo-900',  hover: 'hover:bg-indigo-100 hover:border-indigo-400',   text: 'text-indigo-700' },
-  'Lunch Special':  { bg: 'bg-amber-50',    border: 'border-amber-300',   activeBorder: 'border-amber-500',   activeBg: 'bg-amber-200',   activeText: 'text-amber-900',   hover: 'hover:bg-amber-100 hover:border-amber-400',    text: 'text-amber-700' },
-};
 
 const Index = () => {
   const navigate = useNavigate();
@@ -52,6 +46,7 @@ const Index = () => {
   const [selectedPrice, setSelectedPrice] = useState<PriceRange | null>(null);
   const [selectedTastes, setSelectedTastes] = useState<PrimaryTaste[]>([]);
   const [selectedDealTypes, setSelectedDealTypes] = useState<DealType[]>([]);
+  const [selectedFavorites, setSelectedFavorites] = useState<string[]>([]);
   const [selectedFeeds, setSelectedFeeds] = useState<Feeds | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<EatingStyle | null>(null);
   const [veganOnly, setVeganOnly] = useState(false);
@@ -100,6 +95,7 @@ const Index = () => {
     if (p) params.set('price', p);
     if (selectedTastes.length > 0) params.set('tastes', selectedTastes.join(','));
     if (selectedDealTypes.length > 0) params.set('deals', selectedDealTypes.join(','));
+    if (selectedFavorites.length > 0) params.set('search', selectedFavorites.join(','));
     if (selectedFeeds) params.set('feeds', selectedFeeds);
     if (selectedStyle) params.set('style', selectedStyle);
     if (veganOnly) params.set('vegan', '1');
@@ -108,8 +104,8 @@ const Index = () => {
     navigate(`/restaurants${qs ? `?${qs}` : ''}`);
   };
 
-  const hasFilters = selectedPrice || selectedTastes.length > 0 || selectedDealTypes.length > 0 || selectedFeeds || selectedStyle || veganOnly;
-  const filterCount = (selectedPrice ? 1 : 0) + selectedTastes.length + selectedDealTypes.length + (selectedFeeds ? 1 : 0) + (selectedStyle ? 1 : 0) + (veganOnly ? 1 : 0);
+  const hasFilters = selectedPrice || selectedTastes.length > 0 || selectedDealTypes.length > 0 || selectedFavorites.length > 0 || selectedFeeds || selectedStyle || veganOnly;
+  const filterCount = (selectedPrice ? 1 : 0) + selectedTastes.length + selectedDealTypes.length + selectedFavorites.length + (selectedFeeds ? 1 : 0) + (selectedStyle ? 1 : 0) + (veganOnly ? 1 : 0);
 
   return (
     <div className="relative min-h-screen bg-background safe-bottom">
@@ -407,38 +403,8 @@ const Index = () => {
           <div className="w-full h-px bg-gradient-to-r from-transparent via-accent/30 to-transparent" />
         </section>
 
-        {/* Quick Food Category Buttons */}
-        <section className="w-full py-6 sm:py-8">
-          <div className="max-w-2xl mx-auto px-4">
-            <div className="flex flex-wrap justify-center gap-2.5 sm:gap-3">
-              {([
-                { emoji: '🌮', label: 'TACOS', from: 'from-orange-500', via: 'via-red-500', to: 'to-yellow-500', shadow: 'shadow-orange-500/25 hover:shadow-orange-500/40' },
-                { emoji: '🍔', label: 'BURGERS', from: 'from-amber-600', via: 'via-orange-500', to: 'to-yellow-500', shadow: 'shadow-amber-500/25 hover:shadow-amber-500/40' },
-                { emoji: '🍕', label: 'PIZZA', from: 'from-red-500', via: 'via-rose-500', to: 'to-orange-400', shadow: 'shadow-red-500/25 hover:shadow-red-500/40' },
-                { emoji: '🍗', label: 'WINGS', from: 'from-yellow-500', via: 'via-amber-500', to: 'to-orange-500', shadow: 'shadow-yellow-500/25 hover:shadow-yellow-500/40' },
-              ] as const).map((item, i) => (
-                <motion.button
-                  key={item.label}
-                  initial={{ opacity: 0, scale: 0.85 }}
-                  whileInView={{ opacity: 1, scale: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: 0.06 * i, type: 'spring', stiffness: 300, damping: 20 }}
-                  whileTap={{ scale: 0.93 }}
-                  whileHover={{ scale: 1.05, rotate: [0, -2, 2, -1, 1, 0], transition: { rotate: { duration: 1.8, repeat: Infinity, ease: 'easeInOut' } } }}
-                  onClick={() => {
-                    const params = new URLSearchParams();
-                    params.set('search', item.label.toLowerCase());
-                    navigate(`/restaurants?${params.toString()}`);
-                  }}
-                  className={`btn-shine group relative flex items-center gap-2 px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r ${item.from} ${item.via} ${item.to} text-white font-display font-bold text-lg sm:text-xl tracking-wider cursor-pointer shadow-lg ${item.shadow} transition-shadow overflow-hidden`}
-                >
-                  <span className="text-lg sm:text-xl">{item.emoji}</span>
-                  <span className="drop-shadow-sm">{item.label}</span>
-                </motion.button>
-              ))}
-            </div>
-          </div>
-        </section>
+        {/* Spacer between hero and refinements */}
+        <div className="w-full py-2 sm:py-4" />
 
         {/* Optional Refinements */}
         <section id="refine-section" className="flex flex-col items-center px-4 py-10 sm:py-12">
@@ -564,35 +530,60 @@ const Index = () => {
             )}
           </div>
 
-          {/* Savings type */}
+          {/* Favorites */}
           <div className="w-full max-w-2xl mb-8">
             <p className="text-sm sm:text-base font-display font-bold text-foreground text-center mb-3 uppercase tracking-widest">Favorites</p>
-            <div className="flex gap-2 justify-start sm:justify-center overflow-x-auto scrollbar-hide scroll-touch px-2 sm:px-0 pb-1">
-              {DEAL_TYPES.map((deal, i) => {
-                const isActive = selectedDealTypes.includes(deal);
-                const dc = DEAL_COLORS[deal];
+            <div className="flex flex-wrap gap-2 justify-start sm:justify-center overflow-x-auto scrollbar-hide scroll-touch px-2 sm:px-0 pb-1">
+              {([
+                { key: 'tacos', emoji: '🌮', label: 'Tacos', type: 'food' as const },
+                { key: 'burgers', emoji: '🍔', label: 'Burgers', type: 'food' as const },
+                { key: 'pizza', emoji: '🍕', label: 'Pizza', type: 'food' as const },
+                { key: 'wings', emoji: '🍗', label: 'Wings', type: 'food' as const },
+                { key: 'BOGO', emoji: '🎉', label: 'BOGO', type: 'deal' as const },
+                { key: 'Lunch Special', emoji: '☀️', label: 'Lunch Special', type: 'deal' as const },
+              ]).map((item, i) => {
+                const isActive = item.type === 'deal'
+                  ? selectedDealTypes.includes(item.key as DealType)
+                  : selectedFavorites.includes(item.key);
+                const colors: Record<string, { bg: string; border: string; activeBorder: string; activeBg: string; activeText: string; hover: string; text: string }> = {
+                  tacos:            { bg: 'bg-orange-50',   border: 'border-orange-300',  activeBorder: 'border-orange-500',  activeBg: 'bg-orange-200',  activeText: 'text-orange-900',  hover: 'hover:bg-orange-100 hover:border-orange-400',  text: 'text-orange-700' },
+                  burgers:          { bg: 'bg-amber-50',    border: 'border-amber-300',   activeBorder: 'border-amber-500',   activeBg: 'bg-amber-200',   activeText: 'text-amber-900',   hover: 'hover:bg-amber-100 hover:border-amber-400',    text: 'text-amber-700' },
+                  pizza:            { bg: 'bg-red-50',      border: 'border-red-300',     activeBorder: 'border-red-500',     activeBg: 'bg-red-200',     activeText: 'text-red-900',     hover: 'hover:bg-red-100 hover:border-red-400',        text: 'text-red-700' },
+                  wings:            { bg: 'bg-yellow-50',   border: 'border-yellow-300',  activeBorder: 'border-yellow-500',  activeBg: 'bg-yellow-200',  activeText: 'text-yellow-900',  hover: 'hover:bg-yellow-100 hover:border-yellow-400',  text: 'text-yellow-700' },
+                  BOGO:             { bg: 'bg-violet-50',   border: 'border-violet-300',  activeBorder: 'border-violet-500',  activeBg: 'bg-violet-200',  activeText: 'text-violet-900',  hover: 'hover:bg-violet-100 hover:border-violet-400',  text: 'text-violet-700' },
+                  'Lunch Special':  { bg: 'bg-amber-50',    border: 'border-amber-300',   activeBorder: 'border-amber-500',   activeBg: 'bg-amber-200',   activeText: 'text-amber-900',   hover: 'hover:bg-amber-100 hover:border-amber-400',    text: 'text-amber-700' },
+                };
+                const c = colors[item.key];
                 return (
                   <motion.button
-                    key={deal}
+                    key={item.key}
                     initial={{ opacity: 0, y: 8 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.03 * i }}
                     whileTap={{ scale: 0.93 }}
-                    onClick={() => toggleDealType(deal)}
+                    onClick={() => {
+                      if (item.type === 'deal') {
+                        toggleDealType(item.key as DealType);
+                      } else {
+                        setSelectedFavorites((prev) =>
+                          prev.includes(item.key) ? prev.filter((f) => f !== item.key) : [...prev, item.key]
+                        );
+                      }
+                    }}
                     className={`flex items-center gap-1.5 px-4 py-2.5 rounded-full border transition-all cursor-pointer text-sm font-body font-semibold whitespace-nowrap flex-shrink-0 ${
                       isActive
-                        ? `${dc.activeBorder} ${dc.activeBg} ${dc.activeText} ring-1 ring-current/30 shadow-sm`
-                        : `${dc.border} ${dc.bg} ${dc.text} ${dc.hover}`
+                        ? `${c.activeBorder} ${c.activeBg} ${c.activeText} ring-1 ring-current/30 shadow-sm`
+                        : `${c.border} ${c.bg} ${c.text} ${c.hover}`
                     }`}
                   >
-                    <span className="text-base">{DEAL_ICONS[deal]}</span>
-                    {deal}
+                    <span className="text-base">{item.emoji}</span>
+                    {item.label}
                   </motion.button>
                 );
               })}
             </div>
-            {selectedDealTypes.length > 0 && (
+            {(selectedDealTypes.length > 0 || selectedFavorites.length > 0) && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -600,7 +591,7 @@ const Index = () => {
               >
                 <motion.button
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => setSelectedDealTypes([])}
+                  onClick={() => { setSelectedDealTypes([]); setSelectedFavorites([]); }}
                   className="text-xs font-body font-medium text-destructive/80 hover:text-destructive px-2.5 py-1 rounded-full border border-destructive/30 hover:border-destructive/60 hover:bg-destructive/10 transition-all cursor-pointer"
                 >
                   Clear
