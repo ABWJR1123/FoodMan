@@ -532,7 +532,7 @@ const Index = () => {
 
           {/* Favorites */}
           <div className="w-full max-w-2xl mb-8">
-            <p className="text-sm sm:text-base font-display font-bold text-foreground text-center mb-3 uppercase tracking-widest">Favorites</p>
+            <p className="text-xl sm:text-2xl font-display font-bold text-foreground text-center mb-3 uppercase tracking-widest">Favorites</p>
             <div className="flex flex-wrap gap-2 justify-start sm:justify-center overflow-x-auto scrollbar-hide scroll-touch px-2 sm:px-0 pb-1">
               {([
                 { key: 'tacos', emoji: '🌮', label: 'Tacos', type: 'food' as const },
